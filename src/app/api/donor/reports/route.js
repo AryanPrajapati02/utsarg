@@ -33,7 +33,6 @@ export async function GET(request) {
         const months = parseInt(searchParams.get('months')) || 12
 
         // Calculate date range
-        const endDate = new Date()
         const startDate = new Date()
         if (months === 'all') {
             startDate.setFullYear(2020) // Set to a very early date
@@ -41,7 +40,42 @@ export async function GET(request) {
             startDate.setMonth(startDate.getMonth() - months)
         }
 
-        // Get all donations for the user
+        // First, get donor profile(s) for this user (with orphaned profile fix)
+        const { data: orphanedProfiles } = await supabase
+            .from('donor_profiles')
+            .select('id')
+            .is('user_id', null)
+        
+        // Auto-fix orphaned profiles
+        if (orphanedProfiles && orphanedProfiles.length > 0) {
+            for (const profile of orphanedProfiles) {
+                const { data: donations } = await supabase
+                    .from('donations')
+                    .select('id')
+                    .eq('donor_id', profile.id)
+                
+                if (donations && donations.length > 0) {
+                    await supabase
+                        .from('donor_profiles')
+                        .update({ user_id: decoded.userId })
+                        .eq('id', profile.id)
+                }
+            }
+        }
+
+        // Get donor profiles for this user
+        const { data: donorProfiles } = await supabase
+            .from('donor_profiles')
+            .select('id')
+            .eq('user_id', decoded.userId)
+
+        if (!donorProfiles || donorProfiles.length === 0) {
+            return NextResponse.json({ error: 'Donor profile not found' }, { status: 404 })
+        }
+
+        const profileIds = donorProfiles.map(p => p.id)
+
+        // Get all donations for the user's profiles
         const { data: donations, error: donationsError } = await supabase
             .from('donations')
             .select(`
@@ -54,14 +88,14 @@ export async function GET(request) {
           id,
           title,
           category,
-          ngos (
-            name,
-            city,
-            state
+          ngo_profiles (
+            ngo_name,
+            registered_state,
+            registered_district
           )
         )
       `)
-            .eq('user_id', decoded.userId)
+            .in('donor_id', profileIds)
             .gte('created_at', startDate.toISOString())
             .order('created_at', { ascending: false })
 
@@ -131,8 +165,8 @@ export async function GET(request) {
                         id: campaignId,
                         title: donation.campaigns.title,
                         category: donation.campaigns.category,
-                        ngo_name: donation.campaigns.ngos?.name || 'Unknown NGO',
-                        location: `${donation.campaigns.ngos?.city || ''}, ${donation.campaigns.ngos?.state || ''}`.trim().replace(/^,\s*|,\s*$/g, '') || 'Unknown',
+                        ngo_name: donation.campaigns.ngo_profiles?.ngo_name || 'Unknown NGO',
+                        location: `${donation.campaigns.ngo_profiles?.registered_district || ''}, ${donation.campaigns.ngo_profiles?.registered_state || ''}`.trim().replace(/^,\s*|,\s*$/g, '') || 'Unknown',
                         your_donation: 0,
                         donation_count: 0
                     }
@@ -153,8 +187,8 @@ export async function GET(request) {
         // Geographic impact
         const stateData = {}
         completedDonations.forEach(donation => {
-            if (donation.campaigns?.ngos?.state) {
-                const state = donation.campaigns.ngos.state
+            if (donation.campaigns?.ngo_profiles?.registered_state) {
+                const state = donation.campaigns.ngo_profiles.registered_state
                 if (!stateData[state]) {
                     stateData[state] = {
                         state,

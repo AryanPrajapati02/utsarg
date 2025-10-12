@@ -29,12 +29,55 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get user profile
-    const { data: profile } = await supabase
+    // STEP 1: Fix orphaned profiles first (auto-repair)
+    console.log('Checking for orphaned profiles...')
+    
+    const { data: orphanedProfiles } = await supabase
+      .from('donor_profiles')
+      .select('id, full_name, phone')
+      .is('user_id', null)
+    
+    let profilesFixed = 0
+    if (orphanedProfiles && orphanedProfiles.length > 0) {
+      for (const profile of orphanedProfiles) {
+        const { data: donations } = await supabase
+          .from('donations')
+          .select('id')
+          .eq('donor_id', profile.id)
+        
+        if (donations && donations.length > 0) {
+          const { error: linkError } = await supabase
+            .from('donor_profiles')
+            .update({ user_id: decoded.userId })
+            .eq('id', profile.id)
+          
+          if (!linkError) {
+            profilesFixed++
+            console.log(`Auto-linked orphaned profile ${profile.id} to user ${decoded.userId}`)
+          }
+        }
+      }
+    }
+
+    // STEP 2: Get user profile (now should include any previously orphaned profiles)
+    const { data: profiles } = await supabase
       .from('donor_profiles')
       .select('*')
       .eq('user_id', decoded.userId)
-      .single()
+
+    // Use the first profile or merge data from multiple profiles if needed
+    let profile = profiles?.[0]
+    
+    // If multiple profiles exist, merge the data (use the one with the highest total_donated)
+    if (profiles && profiles.length > 1) {
+      profile = profiles.reduce((best, current) => 
+        (current.total_donated || 0) > (best.total_donated || 0) ? current : best
+      )
+      
+      // Merge donation totals from all profiles
+      const totalFromAllProfiles = profiles.reduce((sum, p) => sum + (p.total_donated || 0), 0)
+      profile.total_donated = totalFromAllProfiles
+    }
 
     // Get user email
     const { data: userEmail } = await supabase
@@ -43,20 +86,23 @@ export async function GET(request) {
       .eq('id', decoded.userId)
       .single()
 
-    // Get donation statistics
+    // Get all profile IDs for donation statistics
+    const allProfileIds = profiles?.map(p => p.id) || []
+
+    // Get donation statistics from all linked profiles
     const { data: donations } = await supabase
       .from('donations')
       .select('amount, created_at, payment_status')
-      .eq('donor_id', profile?.id)
+      .in('donor_id', allProfileIds)
 
     const completedDonations = donations?.filter(d => d.payment_status === 'completed') || []
     const totalDonated = completedDonations.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0)
     
-    // Get campaigns supported
+    // Get campaigns supported from all linked profiles
     const { data: campaignsSupported } = await supabase
       .from('donations')
       .select('campaign_id')
-      .eq('donor_id', profile?.id)
+      .in('donor_id', allProfileIds)
       .eq('payment_status', 'completed')
 
     const uniqueCampaigns = new Set(campaignsSupported?.map(d => d.campaign_id) || [])
@@ -91,6 +137,12 @@ export async function GET(request) {
         impactScore: Math.floor(totalDonated / 1000) + uniqueCampaigns.size * 10,
         memberSince: userEmail?.created_at,
         donorTier
+      },
+      debug: {
+        profilesFixed,
+        totalProfiles: profiles?.length || 0,
+        totalDonations: donations?.length || 0,
+        profileIds: allProfileIds
       }
     })
 
@@ -134,12 +186,35 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 })
     }
 
-    // Update or insert profile
-    const { data: existingProfile } = await supabase
+    // Fix orphaned profiles first
+    const { data: orphanedProfiles } = await supabase
       .from('donor_profiles')
       .select('id')
+      .is('user_id', null)
+    
+    if (orphanedProfiles && orphanedProfiles.length > 0) {
+      for (const profile of orphanedProfiles) {
+        const { data: donations } = await supabase
+          .from('donations')
+          .select('id')
+          .eq('donor_id', profile.id)
+        
+        if (donations && donations.length > 0) {
+          await supabase
+            .from('donor_profiles')
+            .update({ user_id: decoded.userId })
+            .eq('id', profile.id)
+        }
+      }
+    }
+
+    // Update or insert profile
+    const { data: existingProfiles } = await supabase
+      .from('donor_profiles')
+      .select('id, total_donated')
       .eq('user_id', decoded.userId)
-      .single()
+
+    const existingProfile = existingProfiles?.[0]
 
     const updateData = {
       user_id: decoded.userId,
@@ -148,6 +223,11 @@ export async function PUT(request) {
       address: profileData.address?.trim() || null,
       preferred_causes: profileData.interests || [],
       updated_at: new Date().toISOString()
+    }
+
+    // If updating existing profile, preserve the total_donated
+    if (existingProfile) {
+      updateData.total_donated = existingProfile.total_donated
     }
 
     let result
