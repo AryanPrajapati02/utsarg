@@ -193,8 +193,7 @@ function VerifyEmailContent() {
       </div>
     </div>
   )
-}expor
-t default function VerifyEmailPage() {
+}export default function VerifyEmailPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
