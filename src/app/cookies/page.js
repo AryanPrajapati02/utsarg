@@ -1,4 +1,4 @@
-import PublicLayout from '@/components/layout/PublicLayout';
+'use client'
 
 export default function CookiePolicy() {
   return (
@@ -264,8 +264,11 @@ export default function CookiePolicy() {
                 <button 
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                   onClick={() => {
-                    // This would trigger your cookie consent manager
-                    alert('Cookie preferences panel would open here');
+                    // Trigger cookie consent manager
+                    if (typeof window !== 'undefined') {
+                      // This would integrate with your cookie consent system
+                      window.location.reload();
+                    }
                   }}
                 >
                   Manage Cookie Preferences
