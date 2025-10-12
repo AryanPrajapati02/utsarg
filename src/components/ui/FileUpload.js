@@ -114,6 +114,7 @@ export default function FileUpload({
               <div key={file.id} className="relative group">
                 <div className="border border-neutral-200 rounded-lg p-3 bg-white hover:shadow-md transition-shadow">
                   {file.type && file.type.startsWith('image/') ? (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={file.data}
                       alt={file.name}

@@ -1,43 +1,27 @@
-'use client'
-
 import "./globals.css";
 import "../styles/responsive.css";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import CookieConsent from "@/components/ui/CookieConsent";
-import { Toaster } from 'react-hot-toast';
-import { usePathname } from 'next/navigation';
+import ClientLayout from "@/components/layout/ClientLayout";
+
+export const metadata = {
+  title: 'Utsarg - NGO Platform',
+  description: 'Connect with NGOs, donate to causes, and make a difference in your community.',
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
+};
 
 export default function RootLayout({ children }) {
-  const pathname = usePathname();
-  
-  // Check if current page is a dashboard page
-  const isDashboardPage = pathname && (
-    pathname.startsWith('/admin/') ||
-    pathname.startsWith('/ngo/') ||
-    pathname.startsWith('/donor/') ||
-    pathname.startsWith('/volunteer/')
-  );
-
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/logo.png" type="image/png" />
+        <link rel="shortcut icon" href="/logo.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+      </head>
       <body className="min-h-screen flex flex-col">
-        {!isDashboardPage && <Header />}
-        <main className={isDashboardPage ? "min-h-screen" : "flex-1"}>
-          {children}
-        </main>
-        {!isDashboardPage && <Footer />}
-        <CookieConsent />
-        <Toaster 
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#363636',
-              color: '#fff',
-            },
-          }}
-        />
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

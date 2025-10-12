@@ -176,7 +176,7 @@ export default function FeedbackForm({ ngoId, ngoName, userType = 'general', onS
             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
           />
           <label htmlFor="anonymous" className="ml-2 text-sm text-gray-700">
-            Submit anonymously (your name won't be shown publicly)
+            Submit anonymously (your name won&apos;t be shown publicly)
           </label>
         </div>
 

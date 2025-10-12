@@ -76,7 +76,7 @@ export default function CookieConsent() {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">We use cookies</h3>
               <p className="text-sm text-gray-600">
                 We use cookies to enhance your browsing experience, analyze site traffic, and personalize content. 
-                By clicking "Accept All", you consent to our use of cookies. You can manage your preferences or learn more in our{' '}
+                By clicking &quot;Accept All&quot;, you consent to our use of cookies. You can manage your preferences or learn more in our{' '}
                 <Link href="/cookies" className="text-blue-600 hover:text-blue-800 underline">
                   Cookie Policy
                 </Link>.

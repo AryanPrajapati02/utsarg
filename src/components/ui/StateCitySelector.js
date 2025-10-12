@@ -32,7 +32,7 @@ export default function StateCitySelector({
         onCityChange('')
       }
     }
-  }, [selectedState])
+  }, [selectedState, onCityChange])
 
   const fetchStates = async () => {
     try {

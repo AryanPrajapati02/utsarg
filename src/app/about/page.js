@@ -79,7 +79,7 @@ export default function AboutPage() {
               About Utsarg
             </h1>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Utsarg is India's leading platform connecting generous donors with verified NGOs, 
+              Utsarg is India&apos;s leading platform connecting generous donors with verified NGOs, 
               making charitable giving transparent, secure, and impactful.
             </p>
           </div>
@@ -150,7 +150,7 @@ export default function AboutPage() {
                 a platform that would address these pain points.
               </p>
               <p className="text-gray-600 mb-4">
-                The name "Utsarg" comes from Sanskrit, meaning "dedication" or "sacrifice for a noble cause." 
+                The name &quot;Utsarg&quot; comes from Sanskrit, meaning &quot;dedication&quot; or &quot;sacrifice for a noble cause.&quot; 
                 This reflects our core belief that every act of giving, no matter how small, contributes to 
                 building a better society.
               </p>

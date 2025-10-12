@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { 
   Home, 
   Users, 
@@ -99,9 +100,13 @@ export default function DashboardLayout({ children, userType = 'admin', user = {
         {/* Logo Section */}
         <div className="flex items-center justify-between h-16 px-6 border-b border-neutral-200 flex-shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-md">
-              <span className="text-white font-bold text-lg">U</span>
-            </div>
+            <Image 
+              src="/logo.png" 
+              alt="Utsarg Logo" 
+              width={40} 
+              height={40}
+              className="rounded-lg shadow-md"
+            />
             <div>
               <span className="text-xl font-bold text-neutral-900">Utsarg</span>
               <p className="text-xs text-neutral-500 capitalize">
