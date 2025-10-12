@@ -10,6 +10,9 @@ import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
 import StateCitySelector from '@/components/ui/StateCitySelector'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+
 const USER_TYPES = [
   {
     id: 'ngo',
