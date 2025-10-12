@@ -126,6 +126,35 @@ export
       // The payment is still valid, just log the error
     }
 
+    // Update donor profile total_donated if donation has a donor_id
+    if (donation.donor_id) {
+      try {
+        const { data: currentDonor, error: donorFetchError } = await supabaseAdmin
+          .from('donor_profiles')
+          .select('total_donated')
+          .eq('id', donation.donor_id)
+          .single()
+
+        if (!donorFetchError && currentDonor) {
+          const newTotal = parseFloat(currentDonor.total_donated || 0) + parseFloat(donation.amount)
+          
+          const { error: donorUpdateError } = await supabaseAdmin
+            .from('donor_profiles')
+            .update({ total_donated: newTotal })
+            .eq('id', donation.donor_id)
+
+          if (donorUpdateError) {
+            console.error('Donor profile update error:', donorUpdateError)
+          } else {
+            console.log(`Updated donor profile total_donated to ${newTotal}`)
+          }
+        }
+      } catch (error) {
+        console.error('Error updating donor profile:', error)
+        // Don't fail the payment verification if donor update fails
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Payment verified successfully'

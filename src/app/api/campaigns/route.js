@@ -20,7 +20,7 @@ export async function GET(request) {
         )
       `)
       .eq('status', status)
-      .eq('ngo_profiles.verification_status', 'approved')
+      .in('ngo_profiles.verification_status', ['approved', 'verified', 'pending'])
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 

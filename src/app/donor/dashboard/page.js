@@ -31,14 +31,14 @@ export default function DonorDashboard() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      fetchDashboardData(user.userId)
+      fetchDashboardData()
     }
   }, [isAuthenticated, user])
 
-  const fetchDashboardData = async (userId) => {
+  const fetchDashboardData = async () => {
     setDataLoading(true)
     try {
-      const response = await fetch(`/api/donor/dashboard?userId=${userId}`, {
+      const response = await fetch('/api/donor/dashboard', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -46,9 +46,17 @@ export default function DonorDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        setStats(data.stats)
-        setRecentDonations(data.recentDonations)
-        setRecommendedCampaigns(data.recommendedCampaigns)
+        setStats(data.stats || {
+          totalDonated: 0,
+          campaignsSupported: 0,
+          impactScore: 0,
+          thisMonthDonations: 0
+        })
+        setRecentDonations(data.recentDonations || [])
+        setRecommendedCampaigns(data.recommendedCampaigns || [])
+      } else {
+        const errorData = await response.json()
+        console.error('Dashboard API error:', errorData.error)
       }
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
@@ -79,10 +87,19 @@ export default function DonorDashboard() {
             <h1 className="text-2xl font-bold text-neutral-900">Donor Dashboard</h1>
             <p className="text-neutral-600">Track your impact and discover new causes</p>
           </div>
-          <Button onClick={() => router.push('/campaigns')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Find Campaigns
-          </Button>
+          <div className="flex space-x-3">
+            <Button 
+              variant="outline" 
+              onClick={fetchDashboardData}
+              disabled={dataLoading}
+            >
+              {dataLoading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+            <Button onClick={() => router.push('/campaigns')}>
+              <Plus className="w-4 h-4 mr-2" />
+              Find Campaigns
+            </Button>
+          </div>
         </div>
 
         {/* Stats Grid */}
@@ -223,7 +240,7 @@ export default function DonorDashboard() {
                           </span>
                           <span>{campaign.location}</span>
                         </div>
-                        {campaign.campaign_type === 'money' && (
+                        {campaign.campaign_type === 'money' && campaign.target_amount && (
                           <div className="mt-2">
                             <div className="w-full bg-neutral-200 rounded-full h-2">
                               <div 
@@ -235,6 +252,13 @@ export default function DonorDashboard() {
                             </div>
                             <p className="text-xs text-neutral-600 mt-1">
                               ₹{campaign.raised_amount.toLocaleString()} of ₹{campaign.target_amount.toLocaleString()}
+                            </p>
+                          </div>
+                        )}
+                        {campaign.campaign_type === 'money' && !campaign.target_amount && (
+                          <div className="mt-2">
+                            <p className="text-xs text-neutral-600">
+                              ₹{campaign.raised_amount.toLocaleString()} raised
                             </p>
                           </div>
                         )}

@@ -13,7 +13,7 @@ export async function GET(request) {
 
     const offset = (page - 1) * limit
 
-    // Build query for verified NGOs only
+    // Build query for verified NGOs only (include pending for development)
     let query = supabaseAdmin
       .from('ngo_profiles')
       .select(`
@@ -31,7 +31,7 @@ export async function GET(request) {
         created_at,
         verification_status
       `)
-      .in('verification_status', ['approved', 'verified'])
+      .in('verification_status', ['approved', 'verified', 'pending'])
 
     // Apply filters
     if (search) {
@@ -54,7 +54,7 @@ export async function GET(request) {
     const { count } = await supabaseAdmin
       .from('ngo_profiles')
       .select('*', { count: 'exact', head: true })
-      .in('verification_status', ['approved', 'verified'])
+      .in('verification_status', ['approved', 'verified', 'pending'])
 
     // Apply pagination and ordering
     query = query

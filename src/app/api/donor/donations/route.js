@@ -4,9 +4,12 @@ import { verifyToken } from '@/lib/auth'
 
 export async function GET(request) {
   try {
+    console.log('=== DONOR DONATIONS API CALLED ===')
+    
     // Verify donor authentication
     const authHeader = request.headers.get('authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('No authorization header')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -14,21 +17,57 @@ export async function GET(request) {
     const payload = verifyToken(token)
     
     if (!payload || payload.user_type !== 'donor') {
+      console.log('Invalid token or not donor user')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get donor profile
-    const { data: donorProfile, error: profileError } = await supabaseAdmin
+    console.log('Authenticated donor:', payload.userId)
+
+    // STEP 1: Fix orphaned profiles first (auto-repair)
+    console.log('Checking for orphaned profiles...')
+    
+    const { data: orphanedProfiles } = await supabaseAdmin
+      .from('donor_profiles')
+      .select('id, full_name, phone')
+      .is('user_id', null)
+    
+    let profilesFixed = 0
+    if (orphanedProfiles && orphanedProfiles.length > 0) {
+      for (const profile of orphanedProfiles) {
+        const { data: donations } = await supabaseAdmin
+          .from('donations')
+          .select('id')
+          .eq('donor_id', profile.id)
+        
+        if (donations && donations.length > 0) {
+          const { error: linkError } = await supabaseAdmin
+            .from('donor_profiles')
+            .update({ user_id: payload.userId })
+            .eq('id', profile.id)
+          
+          if (!linkError) {
+            profilesFixed++
+            console.log(`Auto-linked orphaned profile ${profile.id} to user ${payload.userId}`)
+          }
+        }
+      }
+    }
+
+    // STEP 2: Get all donor profiles for this user
+    const { data: donorProfiles, error: profileError } = await supabaseAdmin
       .from('donor_profiles')
       .select('id')
       .eq('user_id', payload.userId)
-      .single()
 
-    if (profileError || !donorProfile) {
+    if (profileError || !donorProfiles || donorProfiles.length === 0) {
+      console.error('Profile error:', profileError)
       return NextResponse.json({ error: 'Donor profile not found' }, { status: 404 })
     }
 
-    // Get URL parameters for filtering and pagination
+    const allProfileIds = donorProfiles.map(p => p.id)
+    console.log('Found donor profiles:', allProfileIds)
+
+    // STEP 3: Get URL parameters for filtering and pagination
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page')) || 1
     const limit = parseInt(searchParams.get('limit')) || 10
@@ -36,7 +75,9 @@ export async function GET(request) {
     const type = searchParams.get('type') // 'money', 'clothes', 'food', 'blood'
     const offset = (page - 1) * limit
 
-    // Build query
+    console.log('Query params:', { page, limit, status, type, offset })
+
+    // STEP 4: Build query for all linked profiles
     let query = supabaseAdmin
       .from('donations')
       .select(`
@@ -57,7 +98,7 @@ export async function GET(request) {
           ngo_profiles(ngo_name)
         )
       `, { count: 'exact' })
-      .eq('donor_id', donorProfile.id)
+      .in('donor_id', allProfileIds)
 
     // Apply filters
     if (status) {
@@ -74,14 +115,19 @@ export async function GET(request) {
 
     if (donationsError) {
       console.error('Error fetching donations:', donationsError)
-      return NextResponse.json({ error: 'Failed to fetch donations' }, { status: 500 })
+      return NextResponse.json({ 
+        error: 'Failed to fetch donations',
+        details: donationsError.message 
+      }, { status: 500 })
     }
 
-    // Calculate summary statistics
+    console.log('Found donations:', donations?.length || 0, 'Total count:', count)
+
+    // STEP 5: Calculate summary statistics (get all donations for stats)
     const { data: allDonations } = await supabaseAdmin
       .from('donations')
       .select('amount, payment_status, donation_type')
-      .eq('donor_id', donorProfile.id)
+      .in('donor_id', allProfileIds)
 
     const stats = {
       totalDonations: allDonations?.length || 0,
@@ -97,7 +143,7 @@ export async function GET(request) {
       }
     }
 
-    // Format donations for response
+    // STEP 6: Format donations for response
     const formattedDonations = donations?.map(donation => ({
       id: donation.id,
       campaign: {
@@ -117,6 +163,12 @@ export async function GET(request) {
       created_at: donation.created_at
     })) || []
 
+    console.log('Returning donations data:', {
+      donationsCount: formattedDonations.length,
+      stats,
+      profilesFixed
+    })
+
     return NextResponse.json({
       donations: formattedDonations,
       stats,
@@ -125,17 +177,27 @@ export async function GET(request) {
         limit,
         total: count || 0,
         totalPages: Math.ceil((count || 0) / limit)
+      },
+      debug: {
+        profilesFixed,
+        totalProfiles: donorProfiles.length,
+        queryParams: { page, limit, status, type }
       }
     })
 
   } catch (error) {
     console.error('Donor donations error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error.message 
+    }, { status: 500 })
   }
 }
 
 export async function POST(request) {
   try {
+    console.log('=== DONATIONS POST API CALLED ===')
+    
     // Verify donor authentication
     const authHeader = request.headers.get('authorization')
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -149,15 +211,30 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get donor profile
-    const { data: donorProfile, error: profileError } = await supabaseAdmin
+    // Get donor profile (with orphaned profile fix)
+    let { data: donorProfile, error: profileError } = await supabaseAdmin
       .from('donor_profiles')
       .select('id')
       .eq('user_id', payload.userId)
       .single()
 
     if (profileError || !donorProfile) {
-      return NextResponse.json({ error: 'Donor profile not found' }, { status: 404 })
+      // Try to create a donor profile if it doesn't exist
+      const { data: newProfile, error: createError } = await supabaseAdmin
+        .from('donor_profiles')
+        .insert([{
+          user_id: payload.userId,
+          full_name: 'Donor User',
+          total_donated: 0
+        }])
+        .select('id')
+        .single()
+
+      if (createError) {
+        return NextResponse.json({ error: 'Donor profile not found and could not be created' }, { status: 404 })
+      }
+      
+      donorProfile = newProfile
     }
 
     const { 

@@ -104,12 +104,18 @@ export default function DonatePage({ params }) {
 
   const handleDonate = async () => {
     if (!donationAmount || parseFloat(donationAmount) <= 0) {
-      setError('Please enter a valid donation amount')
+      setError(`Please enter a valid ${campaign.campaign_type === 'money' ? 'donation amount' : 'estimated value'}`)
       return
     }
 
     if (!donorInfo.name || !donorInfo.email || !donorInfo.phone) {
       setError('Please fill in all required fields')
+      return
+    }
+
+    // Additional validation for different campaign types
+    if (campaign.campaign_type !== 'money' && parseFloat(donationAmount) < 10) {
+      setError('Minimum estimated value should be ₹10')
       return
     }
 
@@ -131,10 +137,10 @@ export default function DonatePage({ params }) {
         donor_email: donorInfo.email,
         donor_phone: donorInfo.phone,
         donor_address: donorInfo.address,
-        donation_type: 'money'
+        donation_type: campaign.campaign_type || 'money'
       }
 
-      // Add donor_id if user is authenticated
+      // Add donor_id if user is authenticated (this should be the user ID, not donor profile ID)
       if (isAuthenticated && user) {
         donationPayload.donor_id = user.id
       }
@@ -160,7 +166,7 @@ export default function DonatePage({ params }) {
         amount: parseFloat(donationAmount) * 100, // Amount in paise
         currency: 'INR',
         name: campaign.ngo.ngo_name,
-        description: `Donation for ${campaign.title}`,
+        description: `${campaign.campaign_type === 'money' ? 'Donation' : `${campaign.campaign_type} donation`} for ${campaign.title}`,
         order_id: donationData.razorpay_order_id,
         handler: async function (response) {
           try {
@@ -195,7 +201,7 @@ export default function DonatePage({ params }) {
         },
         notes: {
           campaign_id: campaign.id,
-          donation_type: 'money'
+          donation_type: campaign.campaign_type || 'money'
         },
         theme: {
           color: '#3B82F6'
@@ -246,23 +252,7 @@ export default function DonatePage({ params }) {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      {/* Test Mode Banner */}
-      <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 mb-6">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-yellow-700">
-                <strong>Test Mode:</strong> This is a test environment. No real money will be charged. Use test card details for payments.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+
       
       <div className="max-w-4xl mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -270,28 +260,78 @@ export default function DonatePage({ params }) {
           <Card className="p-6">
             <h1 className="text-2xl font-bold mb-4">{campaign.title}</h1>
             <div className="mb-4">
-              <img 
-                src={campaign.image_url || '/placeholder-campaign.jpg'} 
-                alt={campaign.title}
-                className="w-full h-48 object-cover rounded-lg"
-              />
+              {campaign.images?.[0] ? (
+                <img 
+                  src={campaign.images[0]} 
+                  alt={campaign.title}
+                  className="w-full h-48 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                    e.target.nextSibling.style.display = 'flex'
+                  }}
+                />
+              ) : null}
+              <div 
+                className={`w-full h-48 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center ${campaign.images?.[0] ? 'hidden' : 'flex'}`}
+                style={{ display: campaign.images?.[0] ? 'none' : 'flex' }}
+              >
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-300 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-blue-600 font-medium">{campaign.title}</p>
+                  <p className="text-blue-500 text-sm capitalize">{campaign.campaign_type} Campaign</p>
+                </div>
+              </div>
             </div>
             <p className="text-gray-600 mb-4">{campaign.description}</p>
             
             <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="font-medium">Goal:</span>
-                <span>₹{campaign.goal_amount?.toLocaleString()}</span>
-              </div>
+              {campaign.target_amount && (
+                <div className="flex justify-between">
+                  <span className="font-medium">Goal:</span>
+                  <span>₹{campaign.target_amount?.toLocaleString()}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="font-medium">Raised:</span>
-                <span>₹{campaign.amount_raised?.toLocaleString()}</span>
+                <span>₹{(campaign.raised_amount || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium">Donors:</span>
                 <span>{campaign.donor_count || 0}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Campaign Type:</span>
+                <span className="capitalize">{campaign.campaign_type}</span>
+              </div>
+              {campaign.target_items && (
+                <div className="flex justify-between">
+                  <span className="font-medium">Target Items:</span>
+                  <span>{campaign.target_items.toLocaleString()}</span>
+                </div>
+              )}
             </div>
+
+            {/* Progress Bar for Money Campaigns */}
+            {campaign.campaign_type === 'money' && campaign.target_amount && (
+              <div className="mt-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-1">
+                  <span>Progress</span>
+                  <span>{Math.round((campaign.raised_amount / campaign.target_amount) * 100)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                    style={{ 
+                      width: `${Math.min((campaign.raised_amount / campaign.target_amount) * 100, 100)}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
               <h3 className="font-medium text-blue-900 mb-2">About {campaign.ngo.ngo_name}</h3>
@@ -310,17 +350,38 @@ export default function DonatePage({ params }) {
             )}
 
             <div className="space-y-4">
+              {/* Campaign Type Info */}
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Campaign Type:</strong> {campaign.campaign_type === 'money' ? 'Monetary Donation' : 
+                    campaign.campaign_type === 'blood' ? 'Blood Donation' :
+                    campaign.campaign_type === 'food' ? 'Food Donation' :
+                    campaign.campaign_type === 'clothes' ? 'Clothing Donation' : 
+                    campaign.campaign_type}
+                </p>
+                {campaign.campaign_type !== 'money' && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Note: For non-monetary donations, the amount represents the estimated value of your contribution.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Donation Amount (₹) *
+                  {campaign.campaign_type === 'money' ? 'Donation Amount (₹) *' : 'Estimated Value (₹) *'}
                 </label>
                 <Input
                   type="number"
                   value={donationAmount}
                   onChange={(e) => setDonationAmount(e.target.value)}
-                  placeholder="Enter amount"
+                  placeholder={campaign.campaign_type === 'money' ? 'Enter amount' : 'Enter estimated value'}
                   min="1"
                 />
+                {campaign.campaign_type !== 'money' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Please estimate the monetary value of your {campaign.campaign_type} donation
+                  </p>
+                )}
               </div>
 
               <div>
@@ -380,38 +441,20 @@ export default function DonatePage({ params }) {
                 {processing ? 'Processing...' : `Donate ₹${donationAmount || '0'}`}
               </button>
 
-              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    <svg className="h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <div className="ml-3">
-                    <h3 className="text-sm font-medium text-yellow-800">
-                      Test Mode Active
+                    <h3 className="text-sm font-medium text-green-800">
+                      Secure Payment
                     </h3>
-                    <div className="mt-2 text-sm text-yellow-700">
-                      <p>This is Razorpay test mode. Use these test card details:</p>
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div>
-                          <strong>Successful Payment:</strong>
-                          <ul className="list-disc list-inside mt-1">
-                            <li>Card: 4111 1111 1111 1111</li>
-                            <li>CVV: Any 3 digits</li>
-                            <li>Expiry: Any future date</li>
-                          </ul>
-                        </div>
-                        <div>
-                          <strong>Failed Payment (for testing):</strong>
-                          <ul className="list-disc list-inside mt-1">
-                            <li>Card: 4000 0000 0000 0002</li>
-                            <li>CVV: Any 3 digits</li>
-                            <li>Expiry: Any future date</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
+                    <p className="text-sm text-green-700 mt-1">
+                      Your payment is processed securely through our trusted payment gateway. All transactions are encrypted and protected.
+                    </p>
                   </div>
                 </div>
               </div>

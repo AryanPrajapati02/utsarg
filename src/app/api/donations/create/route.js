@@ -103,11 +103,11 @@ export async function POST(request) {
         donorProfileId = donorProfile.id
         donorDetails = { ...donorDetails, ...donorProfile }
       } else if (!profileError || profileError.code === 'PGRST116') {
-        // Create donor profile if it doesn't exist
+        // Create donor profile if it doesn't exist - ALWAYS link to authenticated user
         const { data: newProfile, error: createError } = await supabaseAdmin
           .from('donor_profiles')
           .insert([{
-            user_id: donor_id,
+            user_id: donor_id, // IMPORTANT: Always link to authenticated user
             full_name: donor_name || 'Anonymous Donor',
             phone: donor_phone || null
           }])
@@ -116,29 +116,83 @@ export async function POST(request) {
 
         if (!createError && newProfile) {
           donorProfileId = newProfile.id
-          console.log('Created new donor profile:', donorProfileId)
+          console.log('Created new donor profile linked to user:', donorProfileId)
         } else {
           console.error('Failed to create donor profile:', createError)
         }
       }
     } else if (!is_anonymous && donor_name && donor_email) {
-      // Anonymous donation but with provided details - create a temporary donor profile
-      const { data: anonymousProfile, error: anonymousError } = await supabaseAdmin
-        .from('donor_profiles')
-        .insert([{
-          user_id: null, // No user account linked
-          full_name: donor_name,
-          phone: donor_phone || null
-        }])
-        .select('id')
+      // Anonymous donation but with provided details
+      // Check if there's an existing user with this email who should be linked
+      const { data: existingUser } = await supabaseAdmin
+        .from('users')
+        .select('id, user_type')
+        .eq('email', donor_email)
+        .eq('user_type', 'donor')
         .single()
 
-      if (!anonymousError && anonymousProfile) {
-        donorProfileId = anonymousProfile.id
-        donorDetails = { full_name: donor_name, email: donor_email, phone: donor_phone }
-        console.log('Created anonymous donor profile:', donorProfileId)
+      if (existingUser) {
+        // User exists - link to their profile instead of creating orphaned profile
+        const { data: userProfile } = await supabaseAdmin
+          .from('donor_profiles')
+          .select('id')
+          .eq('user_id', existingUser.id)
+          .single()
+
+        if (userProfile) {
+          donorProfileId = userProfile.id
+          donorDetails = { full_name: donor_name, email: donor_email, phone: donor_phone }
+          console.log('Using existing user profile:', donorProfileId)
+        } else {
+          // Create profile linked to existing user
+          const { data: newProfile, error: createError } = await supabaseAdmin
+            .from('donor_profiles')
+            .insert([{
+              user_id: existingUser.id, // Link to existing user
+              full_name: donor_name,
+              phone: donor_phone || null
+            }])
+            .select('id')
+            .single()
+
+          if (!createError && newProfile) {
+            donorProfileId = newProfile.id
+            donorDetails = { full_name: donor_name, email: donor_email, phone: donor_phone }
+            console.log('Created profile linked to existing user:', donorProfileId)
+          }
+        }
       } else {
-        console.error('Failed to create anonymous donor profile:', anonymousError)
+        // No existing user - create orphaned profile only as last resort
+        const { data: existingProfile } = await supabaseAdmin
+          .from('donor_profiles')
+          .select('id')
+          .eq('full_name', donor_name)
+          .is('user_id', null)
+          .single()
+
+        if (existingProfile) {
+          donorProfileId = existingProfile.id
+          donorDetails = { full_name: donor_name, email: donor_email, phone: donor_phone }
+          console.log('Using existing anonymous donor profile:', donorProfileId)
+        } else {
+          const { data: anonymousProfile, error: anonymousError } = await supabaseAdmin
+            .from('donor_profiles')
+            .insert([{
+              user_id: null, // No user account linked - only as last resort
+              full_name: donor_name,
+              phone: donor_phone || null
+            }])
+            .select('id')
+            .single()
+
+          if (!anonymousError && anonymousProfile) {
+            donorProfileId = anonymousProfile.id
+            donorDetails = { full_name: donor_name, email: donor_email, phone: donor_phone }
+            console.log('Created anonymous donor profile (last resort):', donorProfileId)
+          } else {
+            console.error('Failed to create anonymous donor profile:', anonymousError)
+          }
+        }
       }
     }
 
