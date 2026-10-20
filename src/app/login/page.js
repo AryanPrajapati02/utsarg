@@ -4,10 +4,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
-import { Heart, Eye, EyeOff } from 'lucide-react'
+import { Heart, Eye, EyeOff, Wand2 } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Card from '@/components/ui/Card'
+
+const DEMO_ACCOUNTS = [
+  { label: 'Super Admin', email: 'admin@utsarg.com', password: 'admin123' },
+  { label: 'NGO', email: 'ngo@utsarg.com', password: 'ngo123' },
+  { label: 'Donor', email: 'donor@utsarg.com', password: 'donor123' },
+  { label: 'Volunteer', email: 'volunteer@utsarg.com', password: 'volunteer123' }
+]
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,9 +24,33 @@ export default function LoginPage() {
   })
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [seeding, setSeeding] = useState(false)
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const fillCredentials = (account) => {
+    setFormData({ email: account.email, password: account.password })
+    toast.success(`Filled ${account.label} credentials`)
+  }
+
+  const seedDemoAccounts = async () => {
+    setSeeding(true)
+    try {
+      const response = await fetch('/api/test/seed-demo', { method: 'POST' })
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        toast.success('Demo accounts ready. Click "Use" to fill credentials.')
+      } else {
+        toast.error(data.error || 'Failed to create demo accounts')
+      }
+    } catch {
+      toast.error('Something went wrong. Please try again.')
+    } finally {
+      setSeeding(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -176,14 +207,39 @@ export default function LoginPage() {
 
         {/* Demo Accounts */}
         <Card className="bg-blue-50 border-blue-200 p-3 sm:p-4">
-          <div className="text-center">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">Demo Accounts</h3>
-            <div className="space-y-1 text-xs sm:text-sm text-blue-700">
-              <p className="break-all"><strong>Super Admin:</strong> admin@ngoplatform.com / admin123</p>
-              <p className="break-all"><strong>NGO:</strong> ngo@example.com / ngo123</p>
-              <p className="break-all"><strong>Donor:</strong> donor@example.com / donor123</p>
-              <p className="break-all"><strong>Volunteer:</strong> volunteer@example.com / volunteer123</p>
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-blue-900">Demo Accounts</h3>
+            <button
+              type="button"
+              onClick={seedDemoAccounts}
+              disabled={seeding}
+              className="flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 disabled:opacity-50"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              {seeding ? 'Setting up...' : 'Setup accounts'}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {DEMO_ACCOUNTS.map((account) => (
+              <div
+                key={account.email}
+                className="flex items-center justify-between gap-3 bg-white/70 rounded-lg px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-blue-900">{account.label}</p>
+                  <p className="text-xs text-blue-700 break-all">
+                    {account.email} / {account.password}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fillCredentials(account)}
+                  className="shrink-0 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-md px-3 py-1.5"
+                >
+                  Use
+                </button>
+              </div>
+            ))}
           </div>
         </Card>
       </div>
